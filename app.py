@@ -1,38 +1,36 @@
 import streamlit as st
-import openai
+import whisper
 import os
 import tempfile
-from dotenv import load_dotenv
 
-# Load API Key
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Load Whisper model (base is a good balance of speed + accuracy)
+@st.cache_resource
+def load_model():
+    return whisper.load_model("base")
 
-# App layout
-st.set_page_config(page_title="Automated Notes Generator", layout="centered")
-st.title("🎙️ Automated Notes Generator")
-st.write("Upload an audio or video file and get instant transcription using OpenAI Whisper.")
+model = load_model()
 
-# File upload
-uploaded_file = st.file_uploader("Choose a file", type=["mp3", "mp4", "wav", "m4a", "mov", "avi"])
+# Page layout
+st.set_page_config(page_title="Note Gen", layout="centered")
+st.title("📝 Note Gen – Offline Audio Transcription")
+st.write("Upload an audio file (.mp3, .wav, .m4a) and get instant transcribed notes — 100% offline, no API key needed.")
+
+# Upload audio file
+uploaded_file = st.file_uploader("Choose an audio file", type=["mp3", "wav", "m4a"])
 
 if uploaded_file is not None:
     st.success(f"Uploaded: {uploaded_file.name}")
 
-    # Save to temp file
+    # Save uploaded file temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(uploaded_file.name)[1]) as temp_file:
         temp_file.write(uploaded_file.getbuffer())
-        temp_file_path = temp_file.name
+        temp_path = temp_file.name
 
-    st.info("Transcribing...")
+    st.info("Transcribing with Whisper...")
 
     try:
-        with open(temp_file_path, "rb") as audio_file:
-            transcript = openai.Audio.transcribe(
-                model="whisper-1",
-                file=audio_file,
-                response_format="text"
-            )
+        result = model.transcribe(temp_path)
+        transcript = result["text"]
 
         st.subheader("🗒️ Transcribed Notes")
         st.markdown(transcript)
@@ -40,14 +38,13 @@ if uploaded_file is not None:
         st.download_button(
             label="📥 Download Notes",
             data=transcript,
-            file_name="transcription.txt",
+            file_name="transcript.txt",
             mime="text/plain"
         )
 
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"❌ Transcription failed: {e}")
 
-    os.remove(temp_file_path)
+    os.remove(temp_path)
 
-st.markdown("---")
-st.caption("🚀 Built with Streamlit + OpenAI Whisper API")
+st.caption("🚀 Built with Whisper | 100% offline | Audio-only (.mp3, .wav, .m4a)")
